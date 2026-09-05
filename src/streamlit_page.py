@@ -1,291 +1,288 @@
+﻿
 import streamlit as st
 import pandas as pd
 import numpy as np
 from scipy import stats
 import plotly.express as px
+from pathlib import Path
 
 st.set_page_config(page_title="B2B Pricing Experimentation Workbench", layout="wide")
 
+PROJECT_ROOT = Path(__file__).resolve().parent
+PUBLIC_DATA = PROJECT_ROOT / "data" / "public" / "hotel_bookings.csv"
+PROCESSED_DATA = PROJECT_ROOT / "data" / "processed" / "hotel_pricing_experiment_panel.csv"
+
 @st.cache_data
-def generate_partner_pricing_data(n_partners=900, seed=42):
+def build_panel(seed=42):
+    if not PUBLIC_DATA.exists():
+        st.error(f"Missing public data file: {PUBLIC_DATA}")
+        st.stop()
+
+    raw = pd.read_csv(PUBLIC_DATA)
     rng = np.random.default_rng(seed)
-    segments = np.array(["Growth", "Core", "Premium", "Long Tail"])
-    regions = np.array(["North Europe", "West Europe", "South Europe", "Central Europe"])
-    channels = np.array(["Direct", "Affiliate", "Mobile", "Corporate"])
-    partner_segment = rng.choice(segments, size=n_partners, p=[0.26, 0.42, 0.16, 0.16])
-    region = rng.choice(regions, size=n_partners, p=[0.24, 0.33, 0.23, 0.20])
-    channel = rng.choice(channels, size=n_partners, p=[0.45, 0.20, 0.25, 0.10])
-    price_band = rng.choice(["Budget", "Midscale", "Upscale"], size=n_partners, p=[0.34, 0.48, 0.18])
-    quality_score = np.clip(rng.normal(78, 10, n_partners), 35, 98)
 
-    base_bookings = rng.gamma(shape=8, scale=18, size=n_partners)
-    seg_mult = np.select([partner_segment == "Growth", partner_segment == "Core", partner_segment == "Premium", partner_segment == "Long Tail"], [1.10, 1.00, 1.22, 0.68])
-    bookings_before = np.maximum(5, base_bookings * seg_mult * (0.65 + quality_score / 100)).round()
-    adr = np.select([price_band == "Budget", price_band == "Midscale", price_band == "Upscale"], [rng.normal(82,14,n_partners), rng.normal(135,22,n_partners), rng.normal(230,44,n_partners)])
-    adr = np.clip(adr, 45, 420)
-    baseline_commission = np.select([partner_segment == "Growth", partner_segment == "Core", partner_segment == "Premium", partner_segment == "Long Tail"], [0.155, 0.165, 0.175, 0.150])
+    df = raw.copy()
+    df = df[df["adr"].notna()]
+    df = df[(df["adr"] > 0) & (df["adr"] < 1000)]
+    df = df.sample(min(len(df), 25000), random_state=seed).reset_index(drop=True)
 
-    eligible = ((partner_segment == "Growth") | (partner_segment == "Core")) & (quality_score > 67)
-    treatment = np.zeros(n_partners, dtype=int)
-    idx = np.where(eligible)[0]
-    treatment[idx] = rng.binomial(1, 0.50, len(idx))
+    df["partner_id"] = (
+        df["hotel"].astype(str).str[:1]
+        + "_"
+        + df["country"].fillna("UNK").astype(str)
+        + "_"
+        + df["market_segment"].fillna("UNK").astype(str)
+        + "_"
+        + (df.index % 700).astype(str)
+    )
 
-    true_uplift = np.select([partner_segment == "Growth", partner_segment == "Core", partner_segment == "Premium", partner_segment == "Long Tail"], [0.105, 0.045, 0.010, 0.000])
-    incentive_rate = np.where(treatment == 1, 0.025, 0.000)
-    cannibalization_pressure = np.where((region == "West Europe") & (price_band == "Midscale"), 0.025, 0.010)
-    noise = rng.normal(0, 0.09, n_partners)
-    bookings_after = np.maximum(1, bookings_before * (1 + treatment * true_uplift - treatment * cannibalization_pressure + noise)).round()
+    segment_rules = [
+        df["market_segment"].isin(["Online TA", "Offline TA/TO"]),
+        df["market_segment"].isin(["Corporate", "Groups"]),
+        df["adr"] >= df["adr"].quantile(0.75),
+        df["adr"] <= df["adr"].quantile(0.25),
+    ]
+    segment_values = ["Core", "Growth", "Premium", "Long Tail"]
+    df["partner_segment"] = np.select(segment_rules, segment_values, default="Core")
 
-    gross_before = bookings_before * adr
-    gross_after = bookings_after * adr
-    margin_before = gross_before * baseline_commission
-    margin_after = gross_after * np.maximum(0.10, baseline_commission - incentive_rate)
-    cancel_before = np.clip(0.18 - quality_score / 900 + rng.normal(0,0.025,n_partners), 0.03, 0.36)
-    cancel_after = np.clip(cancel_before + np.where(treatment == 1, rng.normal(0.005,0.015,n_partners), rng.normal(0,0.012,n_partners)), 0.02, 0.40)
+    df["region_proxy"] = np.select(
+        [
+            df["country"].isin(["PRT", "ESP", "FRA", "ITA"]),
+            df["country"].isin(["GBR", "IRL", "DEU", "NLD", "BEL"]),
+            df["country"].isin(["USA", "CAN", "BRA", "MEX"]),
+        ],
+        ["South Europe", "West/North Europe", "Americas"],
+        default="Other"
+    )
 
-    df = pd.DataFrame({
-        "partner_id": np.arange(100000, 100000+n_partners),
-        "partner_segment": partner_segment,
-        "region": region,
-        "channel": channel,
-        "price_band": price_band,
-        "quality_score": quality_score.round(1),
-        "eligible_for_test": eligible.astype(int),
-        "treatment_group": treatment,
-        "baseline_commission_rate": baseline_commission,
-        "test_incentive_rate": incentive_rate,
-        "bookings_before": bookings_before.astype(int),
-        "bookings_after": bookings_after.astype(int),
-        "adr": adr.round(2),
-        "gross_revenue_before": gross_before.round(2),
-        "gross_revenue_after": gross_after.round(2),
-        "platform_margin_before": margin_before.round(2),
-        "platform_margin_after": margin_after.round(2),
-        "cancellation_rate_before": cancel_before.round(4),
-        "cancellation_rate_after": cancel_after.round(4),
-        "cannibalization_pressure": cannibalization_pressure.round(4),
-    })
-    df["booking_delta"] = df["bookings_after"] - df["bookings_before"]
-    df["revenue_delta"] = df["gross_revenue_after"] - df["gross_revenue_before"]
+    df["lead_time_band"] = pd.cut(
+        df["lead_time"].clip(0, 365),
+        bins=[-1, 7, 30, 90, 365],
+        labels=["0-7d", "8-30d", "31-90d", "90d+"]
+    ).astype(str)
+
+    df["quality_score_proxy"] = np.clip(
+        85 - 25 * df["is_canceled"].astype(float)
+        - 2.5 * df["previous_cancellations"].fillna(0).clip(0, 4)
+        + rng.normal(0, 7, len(df)),
+        35, 99
+    )
+
+    df["baseline_commission_rate"] = np.select(
+        [df["partner_segment"] == "Growth", df["partner_segment"] == "Core", df["partner_segment"] == "Premium", df["partner_segment"] == "Long Tail"],
+        [0.155, 0.165, 0.175, 0.150],
+        default=0.160
+    )
+
+    eligible = df["partner_segment"].isin(["Growth", "Core"]) & (df["quality_score_proxy"] > 67) & (df["is_canceled"] == 0)
+    df["eligible_for_test"] = eligible.astype(int)
+    df["treatment_group"] = 0
+    idx = df.index[df["eligible_for_test"] == 1]
+    df.loc[idx, "treatment_group"] = rng.binomial(1, 0.5, len(idx))
+
+    segment_effect = np.select(
+        [df["partner_segment"] == "Growth", df["partner_segment"] == "Core", df["partner_segment"] == "Premium", df["partner_segment"] == "Long Tail"],
+        [0.090, 0.045, 0.015, 0.000],
+        default=0.030
+    )
+
+    nights = (df["stays_in_weekend_nights"].fillna(0) + df["stays_in_week_nights"].fillna(0)).clip(1, 30)
+    df["gross_booking_value_before"] = df["adr"] * nights
+    df["booking_units_before"] = 1.0
+    df["test_incentive_rate"] = np.where(df["treatment_group"] == 1, 0.025, 0.000)
+    df["cannibalization_pressure"] = np.where((df["region_proxy"] == "West/North Europe") & (df["lead_time_band"].isin(["8-30d", "31-90d"])), 0.025, 0.010)
+
+    response_noise = rng.normal(0, 0.06, len(df))
+    response_multiplier = 1 + df["treatment_group"] * segment_effect - df["treatment_group"] * df["cannibalization_pressure"] + response_noise
+    response_multiplier = np.clip(response_multiplier, 0.70, 1.30)
+
+    df["booking_units_after"] = df["booking_units_before"] * response_multiplier
+    df["gross_booking_value_after"] = df["gross_booking_value_before"] * response_multiplier
+    df["platform_margin_before"] = df["gross_booking_value_before"] * df["baseline_commission_rate"]
+    df["platform_margin_after"] = df["gross_booking_value_after"] * np.maximum(0.10, df["baseline_commission_rate"] - df["test_incentive_rate"])
+
+    df["booking_delta"] = df["booking_units_after"] - df["booking_units_before"]
+    df["revenue_delta"] = df["gross_booking_value_after"] - df["gross_booking_value_before"]
     df["margin_delta"] = df["platform_margin_after"] - df["platform_margin_before"]
-    return df
+    df["cancellation_rate_proxy"] = df["is_canceled"].astype(float)
+
+    keep = ["partner_id", "hotel", "arrival_date_year", "arrival_date_month", "country", "market_segment", "distribution_channel", "reserved_room_type", "customer_type", "lead_time", "lead_time_band", "adr", "partner_segment", "region_proxy", "quality_score_proxy", "eligible_for_test", "treatment_group", "baseline_commission_rate", "test_incentive_rate", "booking_units_before", "booking_units_after", "gross_booking_value_before", "gross_booking_value_after", "platform_margin_before", "platform_margin_after", "booking_delta", "revenue_delta", "margin_delta", "cancellation_rate_proxy", "cannibalization_pressure"]
+    out = df[keep].copy()
+    PROCESSED_DATA.parent.mkdir(parents=True, exist_ok=True)
+    out.to_csv(PROCESSED_DATA, index=False)
+    return out
 
 def summarize_experiment(df):
     test_df = df[df["eligible_for_test"] == 1].copy()
     control = test_df[test_df["treatment_group"] == 0]
     treatment = test_df[test_df["treatment_group"] == 1]
-    def rel_change(a, b): return (a.sum() - b.sum()) / max(b.sum(), 1)
-    ctrl_b = rel_change(control["bookings_after"], control["bookings_before"])
-    trt_b = rel_change(treatment["bookings_after"], treatment["bookings_before"])
-    ctrl_m = rel_change(control["platform_margin_after"], control["platform_margin_before"])
-    trt_m = rel_change(treatment["platform_margin_after"], treatment["platform_margin_before"])
-    c_delta = ((control["bookings_after"] - control["bookings_before"]) / control["bookings_before"].replace(0, np.nan)).dropna()
-    t_delta = ((treatment["bookings_after"] - treatment["bookings_before"]) / treatment["bookings_before"].replace(0, np.nan)).dropna()
-    t_stat, p_value = stats.ttest_ind(t_delta, c_delta, equal_var=False)
+    def rel_change(after, before):
+        return (after.sum() - before.sum()) / max(before.sum(), 1e-9)
+    ctrl_booking = rel_change(control["booking_units_after"], control["booking_units_before"])
+    trt_booking = rel_change(treatment["booking_units_after"], treatment["booking_units_before"])
+    booking_uplift = trt_booking - ctrl_booking
+    ctrl_margin = rel_change(control["platform_margin_after"], control["platform_margin_before"])
+    trt_margin = rel_change(treatment["platform_margin_after"], treatment["platform_margin_before"])
+    margin_uplift = trt_margin - ctrl_margin
+    c_delta = ((control["booking_units_after"] - control["booking_units_before"]) / control["booking_units_before"]).dropna()
+    t_delta = ((treatment["booking_units_after"] - treatment["booking_units_before"]) / treatment["booking_units_before"]).dropna()
+    _, p_value = stats.ttest_ind(t_delta, c_delta, equal_var=False)
     diff = t_delta.mean() - c_delta.mean()
     se = np.sqrt(t_delta.var(ddof=1)/len(t_delta) + c_delta.var(ddof=1)/len(c_delta))
     return {
         "eligible_partners": len(test_df), "treatment_partners": len(treatment), "control_partners": len(control),
-        "booking_uplift": trt_b - ctrl_b, "margin_uplift": trt_m - ctrl_m, "p_value": p_value,
-        "ci_low": diff - 1.96*se, "ci_high": diff + 1.96*se,
+        "booking_uplift": booking_uplift, "margin_uplift": margin_uplift, "p_value": p_value,
+        "ci_low": diff - 1.96 * se, "ci_high": diff + 1.96 * se,
         "treatment_margin_delta": treatment["margin_delta"].sum(), "treatment_revenue_delta": treatment["revenue_delta"].sum(),
-        "cancellation_guardrail": treatment["cancellation_rate_after"].mean() - control["cancellation_rate_after"].mean(),
+        "cancellation_guardrail": treatment["cancellation_rate_proxy"].mean() - control["cancellation_rate_proxy"].mean(),
     }
 
-def make_recommendation(s, segment):
-    if s["booking_uplift"] > 0.035 and s["margin_uplift"] > 0 and s["p_value"] < 0.10 and s["cancellation_guardrail"] < 0.025:
-        action = "Scale with controls"
-        rationale = "The treatment shows positive booking uplift and positive margin movement without a material cancellation guardrail breach."
-    elif s["booking_uplift"] > 0.02 and s["margin_uplift"] <= 0:
-        action = "Retest with narrower eligibility"
-        rationale = "The treatment creates demand but margin quality is weak. Narrow eligibility to preserve upside while reducing subsidy leakage."
-    elif s["booking_uplift"] > 0.02 and s["p_value"] >= 0.10:
-        action = "Extend test"
-        rationale = "Directional uplift exists, but statistical confidence is not strong enough for broad rollout."
-    else:
-        action = "Do not scale yet"
-        rationale = "The current evidence is not strong enough to support rollout."
-    memo = f"""
-### Executive recommendation
+def decision(summary):
+    if summary["booking_uplift"] > 0.035 and summary["margin_uplift"] > 0 and summary["p_value"] < 0.10:
+        return "Scale", "Positive demand and margin signal."
+    if summary["booking_uplift"] > 0.02 and summary["margin_uplift"] <= 0:
+        return "Narrow Target", "Bookings improve, but margin is diluted. Retest with tighter eligibility."
+    if summary["booking_uplift"] > 0.02:
+        return "Retest", "Directional uplift exists, but more evidence is needed."
+    return "Do Not Scale", "Evidence is not strong enough for rollout."
 
-**Recommendation:** {action}
+def prompt_pack(summary, focus):
+    return f"""
+You are a senior pricing analytics advisor. Draft an executive memo from these validated facts.
 
-**Business interpretation:** {rationale}
+Context: public hotel-booking data enriched with a transparent synthetic pricing-treatment layer. No proprietary company data is used.
+Segment focus: {focus}
 
-**Target segment reviewed:** {segment}
+Facts:
+- Eligible rows/partners: {summary['eligible_partners']}
+- Treatment: {summary['treatment_partners']}
+- Control: {summary['control_partners']}
+- Booking uplift vs control trend: {summary['booking_uplift']:.2%}
+- Margin uplift vs control trend: {summary['margin_uplift']:.2%}
+- 95% confidence interval: {summary['ci_low']:.2%} to {summary['ci_high']:.2%}
+- p-value: {summary['p_value']:.4f}
+- Treatment revenue delta: EUR {summary['treatment_revenue_delta']:,.0f}
+- Treatment margin delta: EUR {summary['treatment_margin_delta']:,.0f}
+- Cancellation guardrail difference: {summary['cancellation_guardrail']:.2%}
 
-**Observed experiment signal**
-- Booking uplift vs control trend: **{s['booking_uplift']:.1%}**
-- Margin uplift vs control trend: **{s['margin_uplift']:.1%}**
-- 95% confidence interval for booking response: **{s['ci_low']:.1%} to {s['ci_high']:.1%}**
-- Statistical p-value: **{s['p_value']:.3f}**
-- Cancellation guardrail difference: **{s['cancellation_guardrail']:.1%}**
-
-**Decision logic**
-- Scale only when incremental bookings are positive, margin impact is not diluted, and guardrail metrics remain acceptable.
-- If uplift is positive but margin weak, redesign the incentive rather than scaling broadly.
-- If confidence is weak, extend or redesign the test before rollout.
-
-**Limitations**
-- Public/synthetic portfolio case study. No proprietary company data used.
-- Real deployment would require randomization validation, seasonality controls, partner eligibility governance and longer post-test monitoring.
-"""
-    return action, memo
-
-def ai_prompt_pack(s, segment, business_question):
-    return f"""You are a senior pricing analytics advisor. Create an executive pricing memo from the validated analysis below.
-
-Business question: {business_question}
-Segment: {segment}
-Eligible partners: {s['eligible_partners']}
-Treatment partners: {s['treatment_partners']}
-Control partners: {s['control_partners']}
-Booking uplift vs control: {s['booking_uplift']:.2%}
-Margin uplift vs control: {s['margin_uplift']:.2%}
-95% confidence interval: {s['ci_low']:.2%} to {s['ci_high']:.2%}
-p-value: {s['p_value']:.4f}
-Treatment revenue delta: EUR {s['treatment_revenue_delta']:,.0f}
-Treatment margin delta: EUR {s['treatment_margin_delta']:,.0f}
-Cancellation guardrail difference: {s['cancellation_guardrail']:.2%}
-
-Produce:
-1. Recommendation: scale / stop / retest / narrow eligibility
-2. Commercial rationale
-3. Risks and guardrails
-4. Next experiment design
-5. Limitations and data needed for production use
+Return: recommendation, commercial rationale, risks/guardrails, next experiment, limitations.
 """
 
 st.title("B2B Pricing Experimentation Workbench")
-st.caption("Portfolio case study: controlled pricing test readout, incrementality, cannibalization and AI-assisted executive memo workflow.")
-st.info("Public/synthetic-data case study. No proprietary company data is used. Python/statistics calculate facts first; the AI layer turns validated facts into an executive memo and next-test plan.")
-
+st.caption("V2: real public hotel-booking base data + transparent synthetic pricing-treatment layer")
+st.info("Public hotel-booking data is used as the base. A documented synthetic pricing-treatment layer is added for partner incentives/control-treatment logic. Python/statistics calculate facts first; the AI layer turns validated facts into an executive memo.")
 with st.sidebar:
     st.header("Scenario Controls")
-    seed = st.slider("Synthetic data seed", 1, 99, 42)
-    selected_segment = st.selectbox("Partner segment focus", ["All eligible", "Growth", "Core", "Premium", "Long Tail"])
-    incentive_slider = st.slider("Scenario incentive level", 0.0, 6.0, 2.5, 0.5)
+    seed = st.slider("Experiment seed", 1, 99, 42)
+    focus = st.selectbox("Partner segment focus", ["All eligible", "Growth", "Core", "Premium", "Long Tail"])
+    incentive = st.slider("Scenario incentive level", 0.0, 6.0, 2.5, 0.5)
     st.markdown("---")
-    st.write("Wow element: AI-assisted pricing workflow")
-    st.caption("Business question -> SQL/Python analysis -> experiment readout -> executive memo")
+    st.subheader("Data source")
+    st.write("Base: public hotel_bookings.csv")
+    st.write("Layer: synthetic treatment/control and partner-pricing fields")
 
-df = generate_partner_pricing_data(seed=seed)
-view_df = df if selected_segment == "All eligible" else df[df["partner_segment"] == selected_segment].copy()
-business_question = "Should a digital marketplace offer a pricing incentive to selected partner segments to increase incremental bookings without damaging margin, quality or other partner/customer segments?"
-summary = summarize_experiment(view_df)
-action, memo = make_recommendation(summary, selected_segment)
+df = build_panel(seed=seed)
+view = df if focus == "All eligible" else df[df["partner_segment"] == focus].copy()
+summary = summarize_experiment(view)
+label, rationale = decision(summary)
 
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("Eligible partners", f"{summary['eligible_partners']:,}")
-c2.metric("Booking uplift", f"{summary['booking_uplift']:.1%}")
-c3.metric("Margin uplift", f"{summary['margin_uplift']:.1%}")
-c4.metric("Recommendation", action)
+m1, m2, m3, m4 = st.columns(4)
+m1.metric("Eligible rows/partners", f"{summary['eligible_partners']:,}")
+m2.metric("Booking uplift", f"{summary['booking_uplift']:.1%}")
+m3.metric("Margin uplift", f"{summary['margin_uplift']:.1%}")
+m4.metric("Decision", label)
 
-tabs = st.tabs(["Executive Summary", "Experiment Design", "Results", "Scenario and Elasticity", "Incrementality", "AI Memo", "Data and SQL"])
+st.markdown("### Decision Snapshot")
+st.write(f"**Decision:** {label}")
+st.write(f"**Why:** {rationale}")
+st.write("**Action:** Do not scale broadly until margin quality and eligibility are improved.")
 
+tabs = st.tabs(["Executive Decision", "Experiment Design", "Test Readout", "Scenario / Elasticity", "Incrementality", "AI Memo", "Data + SQL"])
 with tabs[0]:
-    st.header("Executive Summary")
-    st.markdown(memo)
-    st.subheader("Why this is a decision workbench, not just a notebook")
-    st.write("The page converts an ambiguous pricing question into a test design, statistical readout, commercial trade-off, risk check and leadership-ready recommendation.")
+    st.header("Executive Decision")
+    st.markdown(f"""
+**Recommendation:** {label}
 
+**Business interpretation:** {rationale}
+
+**Observed signal**
+- Booking uplift vs control trend: **{summary['booking_uplift']:.1%}**
+- Margin uplift vs control trend: **{summary['margin_uplift']:.1%}**
+- 95% confidence interval for booking response: **{summary['ci_low']:.1%} to {summary['ci_high']:.1%}**
+- Statistical p-value: **{summary['p_value']:.3f}**
+- Cancellation guardrail difference: **{summary['cancellation_guardrail']:.1%}**
+
+**Limitations**
+- Public hotel-booking base data; synthetic partner-pricing treatment layer.
+- Real deployment would require true randomized assignment, seasonality controls, partner eligibility governance, and longer post-test monitoring.
+""")
 with tabs[1]:
     st.header("Experiment Design")
-    a, b = st.columns(2)
-    with a:
-        st.subheader("Hypothesis")
-        st.write("A targeted incentive for high-quality Growth/Core partners increases incremental bookings without unacceptable margin dilution.")
-        st.subheader("Treatment logic")
-        st.write("Eligible partners: Growth/Core and quality score above threshold. Random split into control and treatment. Treatment receives commission discount or equivalent incentive.")
-    with b:
-        st.subheader("Success metrics")
-        st.write("Incremental bookings, revenue delta, margin delta, segment-level response.")
-        st.subheader("Guardrails")
-        st.write("Cancellation rate, margin dilution, cannibalization risk, statistical confidence.")
-
+    st.write("Eligible rows are Growth/Core partner-segment proxies with acceptable quality score and non-cancelled base booking rows.")
+    st.write("Treatment receives a synthetic commission discount / incentive. Control does not.")
+    st.write("Success metrics: booking uplift, revenue delta, margin delta. Guardrails: margin dilution, cancellation proxy, cannibalization risk, confidence.")
 with tabs[2]:
-    st.header("Experiment Results")
-    exp_df = view_df[view_df["eligible_for_test"] == 1].copy()
-    exp_df["group"] = np.where(exp_df["treatment_group"] == 1, "Treatment", "Control")
-    exp_df["booking_change_pct"] = (exp_df["bookings_after"] - exp_df["bookings_before"]) / exp_df["bookings_before"]
-    exp_df["margin_change_pct"] = (exp_df["platform_margin_after"] - exp_df["platform_margin_before"]) / exp_df["platform_margin_before"]
+    st.header("Test Readout")
+    exp = view[view["eligible_for_test"] == 1].copy()
+    exp["group"] = np.where(exp["treatment_group"] == 1, "Treatment", "Control")
+    exp["booking_change_pct"] = (exp["booking_units_after"] - exp["booking_units_before"]) / exp["booking_units_before"]
+    exp["margin_change_pct"] = (exp["platform_margin_after"] - exp["platform_margin_before"]) / exp["platform_margin_before"]
     metric = st.selectbox("Metric", ["booking_change_pct", "margin_change_pct", "revenue_delta", "margin_delta"])
-    st.plotly_chart(px.box(exp_df, x="group", y=metric, color="group", points="outliers", title=f"Control vs Treatment: {metric}"), use_container_width=True)
-    segment_summary = exp_df.groupby(["partner_segment", "group"], as_index=False).agg(partners=("partner_id","count"), bookings_before=("bookings_before","sum"), bookings_after=("bookings_after","sum"), revenue_delta=("revenue_delta","sum"), margin_delta=("margin_delta","sum"), avg_cancel_after=("cancellation_rate_after","mean"))
-    segment_summary["booking_change_pct"] = (segment_summary["bookings_after"] - segment_summary["bookings_before"]) / segment_summary["bookings_before"]
-    st.dataframe(segment_summary, use_container_width=True)
-
+    st.plotly_chart(px.box(exp, x="group", y=metric, color="group", title=f"Control vs Treatment: {metric}"), use_container_width=True)
+    seg = exp.groupby(["partner_segment", "group"], as_index=False).agg(rows=("partner_id", "count"), booking_delta=("booking_delta", "sum"), revenue_delta=("revenue_delta", "sum"), margin_delta=("margin_delta", "sum"), avg_adr=("adr", "mean"))
+    st.dataframe(seg, use_container_width=True)
 with tabs[3]:
-    st.header("Scenario and Elasticity-Style Modelling")
-    st.write("Scenario model only; not a claim of true causal elasticity from real marketplace data.")
-    eligible = view_df[view_df["eligible_for_test"] == 1].copy()
-    incentive = incentive_slider / 100
-    response = np.select([eligible["partner_segment"] == "Growth", eligible["partner_segment"] == "Core", eligible["partner_segment"] == "Premium", eligible["partner_segment"] == "Long Tail"], [1.9, 1.1, 0.4, 0.2])
-    expected_lift = np.clip(incentive * response, 0, 0.18)
-    expected_bookings = eligible["bookings_before"] * (1 + expected_lift)
-    expected_revenue = expected_bookings * eligible["adr"]
-    expected_margin = expected_revenue * np.maximum(0.10, eligible["baseline_commission_rate"] - incentive)
-    scenario = pd.DataFrame({"partner_segment": eligible["partner_segment"], "baseline_bookings": eligible["bookings_before"], "expected_bookings": expected_bookings, "baseline_margin": eligible["platform_margin_before"], "expected_margin": expected_margin})
-    out = scenario.groupby("partner_segment", as_index=False).sum()
-    out["expected_booking_lift"] = (out["expected_bookings"] - out["baseline_bookings"]) / out["baseline_bookings"]
-    out["expected_margin_lift"] = (out["expected_margin"] - out["baseline_margin"]) / out["baseline_margin"]
-    st.dataframe(out, use_container_width=True)
-    st.plotly_chart(px.bar(out, x="partner_segment", y=["expected_booking_lift", "expected_margin_lift"], barmode="group", title="Scenario impact by segment"), use_container_width=True)
-
+    st.header("Scenario / Elasticity-Style Modelling")
+    st.write("This is a scenario model, not a true causal elasticity estimate.")
+    eligible = view[view["eligible_for_test"] == 1].copy()
+    inc = incentive / 100.0
+    response = np.select([eligible["partner_segment"] == "Growth", eligible["partner_segment"] == "Core", eligible["partner_segment"] == "Premium", eligible["partner_segment"] == "Long Tail"], [1.9, 1.1, 0.4, 0.2], default=0.8)
+    expected_lift = np.clip(inc * response, 0, 0.18)
+    expected_value = eligible["gross_booking_value_before"] * (1 + expected_lift)
+    expected_margin = expected_value * np.maximum(0.10, eligible["baseline_commission_rate"] - inc)
+    scen = eligible.assign(expected_booking_lift=expected_lift, expected_margin=expected_margin).groupby("partner_segment", as_index=False).agg(expected_booking_lift=("expected_booking_lift", "mean"), baseline_margin=("platform_margin_before", "sum"), expected_margin=("expected_margin", "sum"))
+    scen["expected_margin_lift"] = (scen["expected_margin"] - scen["baseline_margin"]) / scen["baseline_margin"]
+    st.dataframe(scen, use_container_width=True)
+    st.plotly_chart(px.bar(scen, x="partner_segment", y=["expected_booking_lift", "expected_margin_lift"], barmode="group"), use_container_width=True)
 with tabs[4]:
-    st.header("Incrementality and Cannibalization Check")
-    eligible = view_df[view_df["eligible_for_test"] == 1].copy()
-    tr = eligible[eligible["treatment_group"] == 1]
-    gross_inc = tr["booking_delta"].sum()
-    cannib = np.maximum(0, tr["bookings_after"] * tr["cannibalization_pressure"]).sum()
-    net_inc = gross_inc - cannib
-    ratio = cannib / max(gross_inc, 1)
-    a, b, c = st.columns(3)
-    a.metric("Gross incremental bookings", f"{gross_inc:,.0f}")
-    b.metric("Estimated cannibalized bookings", f"{cannib:,.0f}")
-    c.metric("Net incremental bookings", f"{net_inc:,.0f}", f"Cannibalization {ratio:.1%}")
-    bridge = pd.DataFrame({"step": ["Gross uplift", "Cannibalization adjustment", "Net incremental"], "bookings": [gross_inc, -cannib, net_inc]})
-    st.plotly_chart(px.bar(bridge, x="step", y="bookings", title="Gross to net incrementality bridge"), use_container_width=True)
-
+    st.header("Incrementality and Cannibalization")
+    trt = view[(view["eligible_for_test"] == 1) & (view["treatment_group"] == 1)].copy()
+    gross = trt["booking_delta"].sum()
+    cann = np.maximum(0, trt["booking_units_after"] * trt["cannibalization_pressure"]).sum()
+    net = gross - cann
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Gross uplift units", f"{gross:,.0f}")
+    c2.metric("Cannibalization adjustment", f"{cann:,.0f}")
+    c3.metric("Net incremental units", f"{net:,.0f}")
+    st.plotly_chart(px.bar(pd.DataFrame({"Step": ["Gross", "Cannibalization", "Net"], "Units": [gross, -cann, net]}), x="Step", y="Units"), use_container_width=True)
 with tabs[5]:
-    st.header("AI-Assisted Executive Memo Workflow")
-    st.write("The AI layer does not replace calculations. It converts validated facts into a structured memo, risks, limitations and next-test plan for human review.")
-    st.subheader("Generated memo")
-    st.markdown(memo)
-    st.subheader("AI-ready prompt pack")
-    st.code(ai_prompt_pack(summary, selected_segment, business_question), language="text")
-    st.subheader("Efficiency story")
-    st.write("Manual: define metrics, extract data, compute readout, write memo, revise for stakeholders. AI-assisted: deterministic analytics engine creates validated facts; AI drafts memo, risk section and next-test plan for human review.")
-
+    st.header("AI-Assisted Memo")
+    st.write("AI is used after deterministic calculations, not before. The workflow turns validated facts into an executive recommendation for human review.")
+    st.code(prompt_pack(summary, focus), language="text")
 with tabs[6]:
-    st.header("Data and SQL Logic")
-    st.dataframe(view_df.head(100), use_container_width=True)
+    st.header("Data + SQL")
+    st.write(f"Public source file detected: `{PUBLIC_DATA}`")
+    st.write(f"Processed panel saved to: `{PROCESSED_DATA}`")
+    st.dataframe(view.head(100), use_container_width=True)
     sql = """
-WITH eligible_partners AS (
-    SELECT partner_id, partner_segment, region, treatment_group,
-           bookings_before, bookings_after, gross_revenue_before, gross_revenue_after,
-           platform_margin_before, platform_margin_after
-    FROM partner_pricing_experiment
-    WHERE eligible_for_test = 1
+WITH eligible AS (
+  SELECT * FROM hotel_pricing_experiment_panel WHERE eligible_for_test = 1
 ),
-partner_deltas AS (
-    SELECT *,
-           bookings_after - bookings_before AS booking_delta,
-           gross_revenue_after - gross_revenue_before AS revenue_delta,
-           platform_margin_after - platform_margin_before AS margin_delta,
-           1.0 * (bookings_after - bookings_before) / NULLIF(bookings_before, 0) AS booking_change_pct
-    FROM eligible_partners
-),
-segment_readout AS (
-    SELECT partner_segment, treatment_group, COUNT(*) AS partners,
-           SUM(booking_delta) AS total_booking_delta,
-           SUM(revenue_delta) AS total_revenue_delta,
-           SUM(margin_delta) AS total_margin_delta,
-           AVG(booking_change_pct) AS avg_booking_change_pct
-    FROM partner_deltas
-    GROUP BY partner_segment, treatment_group
+deltas AS (
+  SELECT partner_segment, treatment_group,
+         booking_units_after - booking_units_before AS booking_delta,
+         gross_booking_value_after - gross_booking_value_before AS revenue_delta,
+         platform_margin_after - platform_margin_before AS margin_delta
+  FROM eligible
 )
-SELECT * FROM segment_readout ORDER BY partner_segment, treatment_group;
+SELECT partner_segment, treatment_group, COUNT(*) AS rows,
+       SUM(booking_delta) AS booking_delta,
+       SUM(revenue_delta) AS revenue_delta,
+       SUM(margin_delta) AS margin_delta
+FROM deltas
+GROUP BY partner_segment, treatment_group
+ORDER BY partner_segment, treatment_group;
 """
     st.code(sql, language="sql")
-    st.download_button("Download synthetic experiment data", data=view_df.to_csv(index=False).encode("utf-8"), file_name="b2b_pricing_experiment_synthetic_data.csv", mime="text/csv")
+    st.download_button("Download processed pricing experiment panel", data=view.to_csv(index=False).encode("utf-8"), file_name="hotel_pricing_experiment_panel.csv", mime="text/csv")
+

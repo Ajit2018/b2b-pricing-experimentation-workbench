@@ -4,7 +4,14 @@
 
 This is an applied portfolio project by Ajit Pal Singh. It demonstrates how a pricing analytics workflow can move from an ambiguous commercial question to experiment design, SQL/Python analysis, pricing readout, incrementality/cannibalization checks and an executive recommendation.
 
-The project uses public/synthetic data only. It does not use or infer any proprietary company data.
+## Data approach
+
+V2 uses a hybrid data design:
+
+1. **Real public hotel-booking data** as the base: `data/public/hotel_bookings.csv`
+2. **Transparent synthetic pricing-treatment layer** for partner IDs, partner segments, treatment/control assignment, commission incentives, margin proxy and cannibalization pressure.
+
+No proprietary employer or target-company data is used.
 
 ## Business question
 
@@ -12,6 +19,7 @@ Should a digital marketplace offer a pricing incentive to selected partner segme
 
 ## What the project demonstrates
 
+- Public-data analytics foundation
 - B2B partner-pricing logic
 - Controlled test design
 - A/B test readout
@@ -24,86 +32,25 @@ Should a digital marketplace offer a pricing incentive to selected partner segme
 - AI-assisted executive memo workflow
 - Business recommendation: scale / stop / retest / narrow eligibility
 
-## Why this is not just a notebook
-
-The project is built as a decision workbench. The core principle is:
+## Core principle
 
 Python/statistics calculate validated facts first.  
 The AI layer then converts those facts into an executive memo, risks, limitations and next-test plan for human review.
 
-## Data
-
-The synthetic dataset is generated from a transparent simulation process and saved in:
-
-`data/synthetic/b2b_pricing_experiment_synthetic_data.csv`
-
-Fields include:
-- partner_id
-- partner_segment
-- region
-- channel
-- price_band
-- quality_score
-- eligible_for_test
-- treatment_group
-- baseline_commission_rate
-- test_incentive_rate
-- bookings_before
-- bookings_after
-- adr
-- gross_revenue_before
-- gross_revenue_after
-- platform_margin_before
-- platform_margin_after
-- cancellation_rate_before
-- cancellation_rate_after
-- cannibalization_pressure
-- booking_delta
-- revenue_delta
-- margin_delta
-
-## Limitations
-
-This is a portfolio case study using synthetic data. It is designed to demonstrate methodology and decision thinking, not to estimate real marketplace effects.
-
-A real production version would require:
-- verified randomized assignment
-- real partner and booking data
-- seasonality controls
-- eligibility governance
-- experiment power analysis
-- longer monitoring period
-- true causal-inference validation
-- privacy/security review
-- stakeholder approval workflow
-
 ## Run locally
 
 ```powershell
-cd E:\AJIT_JOB_PORTFOLIO\02_PROJECTS\01_b2b_pricing_experimentation
-python -m venv .venv
-.\.venv\Scripts\activate
-pip install -r requirements.txt
-python .\src\generate_synthetic_data.py
+cd E:\AJIT_JOB_PORTFOLIO_PROJECTS_b2b_pricing_experimentation
+.\.venv\Scriptsctivate
 streamlit run app.py --server.address 0.0.0.0 --server.port 8502
 ```
 
-Open:
-
-`http://localhost:8502`
-
-## Portfolio positioning
-
-This project supports roles in:
-- pricing analytics
-- B2B pricing strategy
-- revenue growth management
-- commercial decision support
-- experimentation analytics
-- AI-enabled analytics workflows
-- consulting / transformation analytics
+Open: `http://localhost:8502`
 
 ## Honest CV wording
 
-Built an applied B2B pricing experimentation workbench using synthetic partner-pricing data, covering controlled test design, uplift readout, margin trade-off analysis, elasticity-style scenarios, incrementality/cannibalization checks, SQL/Python analysis and AI-assisted executive memo workflow.
+Built an applied B2B pricing experimentation workbench using public hotel-booking data enriched with a transparent synthetic pricing-treatment layer, covering controlled test design, uplift readout, margin trade-off analysis, elasticity-style scenarios, incrementality/cannibalization checks, SQL/Python analysis and AI-assisted executive memo workflow.
 
+## Limitations
+
+This is a portfolio case study. It does not estimate real marketplace effects. A production version would require true randomized assignment, real partner economics, seasonality controls, experiment power analysis, privacy/security review and stakeholder governance.
