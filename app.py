@@ -15,7 +15,13 @@ PROCESSED_DATA = PROJECT_ROOT / "data" / "processed" / "hotel_pricing_experiment
 @st.cache_data
 def build_panel(seed=42):
     if not PUBLIC_DATA.exists():
-        st.error(f"Missing public data file: {PUBLIC_DATA}")
+        if PROCESSED_DATA.exists():
+            return pd.read_csv(PROCESSED_DATA)
+        st.error(
+            "No data file found. Expected either data/public/hotel_bookings.csv "
+            "for local rebuild or data/processed/hotel_pricing_experiment_panel.csv "
+            "for cloud deployment."
+        )
         st.stop()
 
     raw = pd.read_csv(PUBLIC_DATA)
@@ -228,9 +234,9 @@ with tabs[2]:
     exp["booking_change_pct"] = (exp["booking_units_after"] - exp["booking_units_before"]) / exp["booking_units_before"]
     exp["margin_change_pct"] = (exp["platform_margin_after"] - exp["platform_margin_before"]) / exp["platform_margin_before"]
     metric = st.selectbox("Metric", ["booking_change_pct", "margin_change_pct", "revenue_delta", "margin_delta"])
-    st.plotly_chart(px.box(exp, x="group", y=metric, color="group", title=f"Control vs Treatment: {metric}"), use_container_width=True)
+    st.plotly_chart(px.box(exp, x="group", y=metric, color="group", title=f"Control vs Treatment: {metric}"), width='stretch')
     seg = exp.groupby(["partner_segment", "group"], as_index=False).agg(rows=("partner_id", "count"), booking_delta=("booking_delta", "sum"), revenue_delta=("revenue_delta", "sum"), margin_delta=("margin_delta", "sum"), avg_adr=("adr", "mean"))
-    st.dataframe(seg, use_container_width=True)
+    st.dataframe(seg, width='stretch')
 with tabs[3]:
     st.header("Scenario / Elasticity-Style Modelling")
     st.write("This is a scenario model, not a true causal elasticity estimate.")
@@ -242,8 +248,8 @@ with tabs[3]:
     expected_margin = expected_value * np.maximum(0.10, eligible["baseline_commission_rate"] - inc)
     scen = eligible.assign(expected_booking_lift=expected_lift, expected_margin=expected_margin).groupby("partner_segment", as_index=False).agg(expected_booking_lift=("expected_booking_lift", "mean"), baseline_margin=("platform_margin_before", "sum"), expected_margin=("expected_margin", "sum"))
     scen["expected_margin_lift"] = (scen["expected_margin"] - scen["baseline_margin"]) / scen["baseline_margin"]
-    st.dataframe(scen, use_container_width=True)
-    st.plotly_chart(px.bar(scen, x="partner_segment", y=["expected_booking_lift", "expected_margin_lift"], barmode="group"), use_container_width=True)
+    st.dataframe(scen, width='stretch')
+    st.plotly_chart(px.bar(scen, x="partner_segment", y=["expected_booking_lift", "expected_margin_lift"], barmode="group"), width='stretch')
 with tabs[4]:
     st.header("Incrementality and Cannibalization")
     trt = view[(view["eligible_for_test"] == 1) & (view["treatment_group"] == 1)].copy()
@@ -254,7 +260,7 @@ with tabs[4]:
     c1.metric("Gross uplift units", f"{gross:,.0f}")
     c2.metric("Cannibalization adjustment", f"{cann:,.0f}")
     c3.metric("Net incremental units", f"{net:,.0f}")
-    st.plotly_chart(px.bar(pd.DataFrame({"Step": ["Gross", "Cannibalization", "Net"], "Units": [gross, -cann, net]}), x="Step", y="Units"), use_container_width=True)
+    st.plotly_chart(px.bar(pd.DataFrame({"Step": ["Gross", "Cannibalization", "Net"], "Units": [gross, -cann, net]}), x="Step", y="Units"), width='stretch')
 with tabs[5]:
     st.header("AI-Assisted Memo")
     st.write("AI is used after deterministic calculations, not before. The workflow turns validated facts into an executive recommendation for human review.")
@@ -263,7 +269,7 @@ with tabs[6]:
     st.header("Data + SQL")
     st.write(f"Public source file detected: `{PUBLIC_DATA}`")
     st.write(f"Processed panel saved to: `{PROCESSED_DATA}`")
-    st.dataframe(view.head(100), use_container_width=True)
+    st.dataframe(view.head(100), width='stretch')
     sql = """
 WITH eligible AS (
   SELECT * FROM hotel_pricing_experiment_panel WHERE eligible_for_test = 1
@@ -285,4 +291,5 @@ ORDER BY partner_segment, treatment_group;
 """
     st.code(sql, language="sql")
     st.download_button("Download processed pricing experiment panel", data=view.to_csv(index=False).encode("utf-8"), file_name="hotel_pricing_experiment_panel.csv", mime="text/csv")
+
 
