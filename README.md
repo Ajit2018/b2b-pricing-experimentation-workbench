@@ -3,6 +3,15 @@
 **Applied pricing analytics portfolio project by Ajit Pal Singh**  
 GitHub-ready project demonstrating pricing experimentation, commercial decision support, SQL/Python analytics and AI-assisted executive memo workflow.
 
+
+---
+
+## Live dashboard
+
+**Live Streamlit dashboard:** [https://ajit-b2b-pricing-workbench.streamlit.app/](https://ajit-b2b-pricing-workbench.streamlit.app/)  
+**GitHub repository:** [https://github.com/Ajit2018/b2b-pricing-experimentation-workbench](https://github.com/Ajit2018/b2b-pricing-experimentation-workbench)
+
+The live dashboard is the fastest way to review the project because it shows the decision snapshot, experiment readout, scenario/elasticity view, incrementality bridge, SQL/data tab and AI memo workflow without needing to run the code locally.
 ---
 
 ## 1. Executive summary
@@ -221,3 +230,4 @@ This project supports applications in:
 - experimentation analytics
 - AI-enabled analytics workflows
 - analytics consulting and transformation
+
