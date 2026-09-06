@@ -1,4 +1,4 @@
-﻿# Methodology
+# Methodology
 
 ## 1. Problem framing
 
@@ -6,11 +6,15 @@ The workbench starts from a commercial pricing question:
 
 Should a marketplace provide a pricing incentive to selected partner segments?
 
-The decision is not based only on volume uplift. It also considers margin quality, cancellation guardrails and possible cannibalization.
+The decision is not based only on volume uplift. It also considers margin quality, cancellation guardrails, statistical confidence and possible cannibalization.
 
 ## 2. Experiment design
 
-Eligible partners are selected based on partner segment and quality score. Eligible partners are split into control and treatment groups. The treatment group receives a pricing incentive.
+Eligibility is frozen before treatment. The public hotel-booking observations are mapped to partner-segment proxies, and only Growth/Core observations with an acceptable synthetic pre-treatment quality score are eligible.
+
+The quality score uses pre-treatment information such as segment and lead time plus fixed-seed variation. The same booking's eventual cancellation outcome is not used to determine eligibility.
+
+Eligible observations are randomized 50/50 into control and treatment groups using fixed seed 42. The treatment group receives a synthetic pricing incentive; control does not.
 
 ## 3. Metrics
 
@@ -21,31 +25,43 @@ Success metrics:
 - segment-level response
 
 Guardrail metrics:
-- cancellation rate
+- cancellation outcome difference
 - margin dilution
 - cannibalization risk
-- confidence in result
+- confidence in the result
 
 ## 4. Statistical readout
 
-The workbench compares control and treatment changes before/after the intervention. It calculates:
-- treatment vs control uplift
-- confidence interval
+The workbench compares treatment and control changes and calculates:
+- treatment vs control booking uplift
+- 95% confidence interval
 - p-value
 - segment readout
-- margin impact
+- revenue and margin impact
+
+This is a portfolio demonstration using a synthetic treatment layer, not a claim of production causal measurement.
 
 ## 5. Scenario and elasticity-style modelling
 
-A scenario slider estimates how different incentive levels may affect bookings and margin by segment. This is not a true causal elasticity estimate; it is a pricing scenario model.
+The scenario tab lets the user vary a hypothetical incentive level and immediately see expected booking and margin trade-offs by eligible segment.
+
+This is explicitly a scenario model, not a true causal elasticity estimate.
 
 ## 6. Incrementality and cannibalization
 
-The workbench separates gross uplift from estimated net incremental uplift after cannibalization adjustment. This prevents an apparently successful pricing action from being accepted without checking whether demand shifted from other segments.
+The synthetic booking response represents gross direct response. Cannibalization is not embedded in that response equation.
 
-## 7. AI-assisted workflow
+The Incrementality tab therefore applies the cannibalization adjustment exactly once:
 
-The AI layer does not produce facts. The deterministic Python/statistical layer produces facts. The AI layer transforms those validated facts into:
+`gross direct uplift -> cannibalization adjustment -> net incremental units`
+
+This avoids double-counting displacement.
+
+## 7. AI-ready workflow
+
+The deterministic Python/statistical layer produces the facts first. The public app then generates an AI-ready prompt pack containing only those validated facts, limitations and requested decision structure.
+
+The public app does not call an LLM and does not claim autonomous decision-making. A user may pass the prompt pack to an approved AI tool to draft:
 - executive memo
 - risks and guardrails
 - limitations
@@ -55,3 +71,5 @@ The AI layer does not produce facts. The deterministic Python/statistical layer 
 ## 8. Human-in-the-loop principle
 
 The recommendation is not auto-approved. It is a structured decision-support output for a pricing manager or leadership team.
+
+A real production implementation would additionally require verified experiment instrumentation, power analysis, seasonality and channel controls, real partner economics, governance, privacy/security review and longer post-test monitoring.
