@@ -162,7 +162,6 @@ def rebuild_experiment_layer(base: pd.DataFrame, seed: int = EXPERIMENT_SEED) ->
         else 0.0
     )
 
-    # Pre-treatment quality proxy only. No cancellation/outcome leakage.
     df["quality_score_proxy"] = np.clip(
         79.0 + segment_quality - lead_time_penalty + repeat_bonus + rng.normal(0, 5, len(df)),
         35,
@@ -221,7 +220,6 @@ def rebuild_experiment_layer(base: pd.DataFrame, seed: int = EXPERIMENT_SEED) ->
     )
 
     response_noise = rng.normal(0, 0.06, len(df))
-    # Gross/direct response only. Cannibalization is deliberately not embedded here.
     response_multiplier = 1 + df["treatment_group"] * segment_effect + response_noise
     response_multiplier = np.clip(response_multiplier, 0.70, 1.30)
 
@@ -276,12 +274,10 @@ def build_panel(seed: int = EXPERIMENT_SEED):
     if PUBLIC_DATA.exists():
         raw = pd.read_csv(PUBLIC_DATA)
         base = _prepare_public_base(raw, seed=seed)
-        source = "public hotel_bookings.csv"
+        source = "public source file"
     elif PROCESSED_DATA.exists():
-        # Treat the checked-in processed file as a base panel only. Rebuild all
-        # synthetic experiment assignment/outcome fields in memory.
         base = pd.read_csv(PROCESSED_DATA)
-        source = "processed cloud base panel"
+        source = "processed deployment panel"
     else:
         raise FileNotFoundError(
             "No data file found. Expected data/public/hotel_bookings.csv or "
@@ -464,7 +460,7 @@ ORDER BY uplift_rank, partner_segment;
 
 def main():
     st.title("B2B Pricing Experimentation Workbench")
-    st.caption("V3: public hotel-booking base + governed synthetic pricing experiment")
+    st.caption("Public hotel-booking base + governed synthetic pricing experiment")
     st.info(
         "Public hotel-booking data provides the base observations. A documented synthetic treatment layer "
         "adds partner incentives, randomized treatment/control assignment and marketplace economics. "
@@ -483,8 +479,9 @@ def main():
         st.caption(f"Experiment seed is fixed at {EXPERIMENT_SEED} for reproducibility.")
         st.markdown("---")
         st.subheader("Data source")
-        st.write(f"Base: {source}")
-        st.write("Layer: synthetic treatment/control, incentive economics and experiment outcomes")
+        st.write("Base: public Hotel Booking Demand data")
+        st.caption(f"Deployment source: {source}")
+        st.write("Synthetic layer: treatment/control assignment, incentives and marketplace economics")
 
     view = df if focus == "All eligible" else df[df["partner_segment"] == focus].copy()
     try:
@@ -495,11 +492,12 @@ def main():
 
     label, rationale, action = decision(summary)
 
-    m1, m2, m3, m4 = st.columns(4)
+    m1, m2, m3, m4 = st.columns([1, 1, 1, 1.25])
     m1.metric("Eligible observations", f"{summary['eligible_observations']:,}")
     m2.metric("Booking uplift", f"{summary['booking_uplift']:.1%}")
     m3.metric("Margin uplift", f"{summary['margin_uplift']:.1%}")
-    m4.metric("Decision", label)
+    m4.markdown("**Decision**")
+    m4.markdown(f"## {label}")
 
     st.markdown("### Decision Snapshot")
     st.write(f"**Decision:** {label}")
@@ -680,7 +678,8 @@ def main():
 
     with tabs[6]:
         st.header("Data + SQL")
-        st.write(f"Runtime base source: **{source}**")
+        st.write("Base source: **public Hotel Booking Demand data**")
+        st.caption(f"Deployment source: {source}")
         st.write(
             "The downloadable panel below contains the corrected in-memory experiment layer used by this dashboard."
         )
