@@ -1,233 +1,178 @@
-﻿# B2B Pricing Experimentation Workbench
+# B2B Pricing Experimentation Workbench
 
-**Applied pricing analytics portfolio project by Ajit Pal Singh**  
-GitHub-ready project demonstrating pricing experimentation, commercial decision support, SQL/Python analytics and AI-assisted executive memo workflow.
+Applied pricing analytics portfolio project by Ajit Pal Singh.
 
-
----
+This project demonstrates pricing experimentation, commercial decision support, SQL/Python analytics, scenario modelling, incrementality/cannibalization analysis and an AI-ready executive memo workflow.
 
 ## Live dashboard
 
-**Live Streamlit dashboard:** [https://ajit-b2b-pricing-workbench.streamlit.app/](https://ajit-b2b-pricing-workbench.streamlit.app/)  
-**GitHub repository:** [https://github.com/Ajit2018/b2b-pricing-experimentation-workbench](https://github.com/Ajit2018/b2b-pricing-experimentation-workbench)
+- Live Streamlit dashboard: https://ajit-b2b-pricing-workbench.streamlit.app/
+- GitHub repository: https://github.com/Ajit2018/b2b-pricing-experimentation-workbench
 
-The live dashboard is the fastest way to review the project because it shows the decision snapshot, experiment readout, scenario/elasticity view, incrementality bridge, SQL/data tab and AI memo workflow without needing to run the code locally.
----
+The live dashboard is the fastest way to review the project. It shows the decision snapshot, experiment design, test readout, scenario/elasticity-style view, incrementality bridge, SQL example and AI-ready memo workflow.
 
 ## 1. Executive summary
 
 This project answers a practical pricing question:
 
-> Should a digital marketplace offer a pricing incentive to selected partner segments to increase incremental bookings without damaging margin, quality, cancellation guardrails or other partner/customer segments?
+> Should a digital marketplace offer a pricing incentive to selected partner segments to increase incremental bookings without damaging margin, cancellation guardrails or other partner/customer segments?
 
-The workbench uses **real public hotel-booking data** as the base and adds a **transparent synthetic pricing-treatment layer** where public data does not contain partner-level pricing experiments.
+The workbench uses real public hotel-booking observations as a base and adds a transparent synthetic pricing-treatment layer because the public data does not contain real partner-level pricing experiments.
 
-The project is designed to show how a pricing analytics workflow can move from:
+Workflow:
 
-**business question â†’ experiment design â†’ SQL/Python analysis â†’ uplift readout â†’ margin trade-off â†’ incrementality/cannibalization check â†’ executive recommendation**
+`business question -> experiment design -> SQL/Python analysis -> uplift readout -> margin trade-off -> incrementality/cannibalization check -> executive recommendation`
 
----
-
-## 2. What this project is
-
-This is a public portfolio case study that demonstrates:
+## 2. What this project demonstrates
 
 - pricing analytics and commercial decision support
-- controlled test design
-- A/B-style experiment readout
+- controlled A/B-style test design
+- randomized treatment/control assignment on a frozen eligible population
 - uplift, confidence interval and p-value interpretation
-- revenue and margin trade-off analysis
+- revenue and platform-margin trade-offs
 - elasticity-style scenario modelling
 - incrementality and cannibalization checks
-- SQL-style segment diagnostics
-- AI-assisted executive memo generation
-- clear assumptions, limitations and human-in-the-loop decision governance
+- SQL analysis using CTEs, conditional aggregation and window ranking
+- AI-ready executive memo prompt generation from validated facts
+- explicit assumptions, limitations and human-in-the-loop governance
 
----
+## 3. What this project does not claim
 
-## 3. What this project is not
-
-This project does **not** claim to estimate real marketplace effects.
+This is a public portfolio case study. It does not claim to estimate real Booking.com or other marketplace effects.
 
 It does not use:
+
 - Booking.com data
 - confidential employer data
 - proprietary partner data
 - real production experiment assignments
 - private customer data
 
-The synthetic treatment layer exists because public datasets do not contain the confidential B2B incentive, partner economics and randomized assignment data that a real company would use.
+The treatment layer is synthetic because real B2B incentive, partner economics and randomized assignment data are proprietary.
 
----
+## 4. Public data source and license
 
-## 4. Data approach
+The base data comes from the **Hotel Booking Demand** datasets described by Nuno Antonio, Ana Almeida and Luis Nunes in *Data in Brief* (2019):
 
-V2 uses a hybrid design:
+- Article / DOI: https://doi.org/10.1016/j.dib.2018.11.126
+- Open-access article: https://pmc.ncbi.nlm.nih.gov/articles/PMC6297060/
+- Common cleaned `hotel_bookings.csv` distribution: https://www.kaggle.com/datasets/jessemostipak/hotel-booking-demand
+- License: **CC BY 4.0**
 
-1. **Real public hotel-booking data** as the base: `hotel_bookings.csv`
-2. **Transparent synthetic pricing-treatment layer** for:
-   - partner ID proxy
-   - partner segment proxy
-   - treatment/control assignment
-   - commission/incentive logic
-   - margin proxy
-   - cannibalization pressure
-   - pricing experiment outcomes
+The raw public source file is intentionally excluded from this repository. A processed base panel is included so the cloud dashboard can run without redistributing the full raw source.
 
-The raw public source file is intentionally excluded from GitHub via `.gitignore`. The processed experiment panel is included for reproducibility and review.
+## 5. Experiment governance and methodology
 
----
+### Pre-treatment eligibility
 
-## 5. Business logic
+Eligibility is determined before treatment using only pre-treatment proxies:
 
-The workbench simulates a marketplace-pricing decision:
+- partner-segment proxy
+- lead time
+- a synthetic pre-treatment quality score generated from segment, lead time, optional repeat-guest history and fixed-seed noise
 
-> A selected group of partners receives a pricing incentive. Should the pricing team scale, stop, retest, or narrow eligibility?
+The same booking's eventual cancellation outcome is **not** used to determine eligibility.
 
-The decision is not based on volume alone. It checks:
+### Randomization
 
-- booking uplift
-- revenue impact
-- platform margin impact
-- cancellation guardrail
-- gross vs net incrementality
-- cannibalization pressure
-- confidence of the result
-- segment-level commercial trade-offs
+Eligible Growth/Core observations are randomized 50/50 into treatment and control using a fixed experiment seed of **42**. The seed is intentionally fixed rather than exposed as a public UI control so the cloud demo is reproducible.
 
----
+### Cancellation guardrail
 
-## 6. Current modules
+Cancellation is retained as an outcome guardrail. Because treatment assignment is independent of the cancellation outcome, the treatment/control cancellation comparison is no longer mechanically forced to zero by eligibility selection.
 
-The Streamlit app includes:
+### Cannibalization
 
-1. **Decision Snapshot**  
-   One-screen decision summary with recommended action and rationale.
+The synthetic booking response represents **gross direct response**. Cannibalization pressure is not subtracted inside that response equation. It is deducted exactly once in the Incrementality tab:
 
-2. **Executive Decision**  
-   Leadership-facing interpretation of uplift, margin, confidence interval, p-value and limitations.
+`gross direct uplift -> cannibalization adjustment -> net incremental units`
 
-3. **Experiment Design**  
-   Eligibility logic, treatment/control setup, success metrics and guardrails.
+This avoids double-counting displacement.
 
-4. **Test Readout**  
-   Control vs treatment comparison and segment-level performance.
+## 6. Current dashboard modules
 
-5. **Scenario / Elasticity**  
-   Incentive-level slider showing expected booking and margin trade-offs.
+1. **Decision Snapshot** - recommendation, rationale and a decision-consistent action.
+2. **Executive Decision** - leadership-facing interpretation of uplift, margin, confidence interval, p-value, guardrails and limitations.
+3. **Experiment Design** - frozen eligibility, treatment/control setup, metrics and guardrails.
+4. **Test Readout** - control vs treatment distribution and segment-level results.
+5. **Scenario / Elasticity** - incentive slider located inside the scenario tab with immediate expected-booking and expected-margin outputs. This is explicitly not a causal elasticity estimate.
+6. **Incrementality** - gross direct uplift, one-time cannibalization adjustment and net incremental effect.
+7. **AI-ready Memo** - a governed prompt pack built from validated facts; the public app does not call an LLM.
+8. **Data + SQL** - corrected in-memory panel, downloadable data and a stronger SQL example using CTEs and a window ranking.
 
-6. **Incrementality**  
-   Gross uplift, cannibalization adjustment and net incremental impact.
+## 7. Decision logic
 
-7. **AI Memo**  
-   AI-ready prompt pack generated from validated facts.
+The recommendation can be:
 
-8. **Data + SQL**  
-   Processed data preview, SQL example and downloadable experiment panel.
+- **Scale**
+- **Narrow Target**
+- **Retest**
+- **Do Not Scale**
 
----
+The action text is generated from the same decision logic, so the dashboard cannot display a recommendation that contradicts its action.
 
-## 7. AI workflow principle
+A material deterioration in the cancellation guardrail can block scaling even if demand increases.
 
-The AI layer does **not** replace statistical analysis or make unsupported claims.
+## 8. Cloud behavior
 
-The project follows this principle:
+The Streamlit deployment can run from the included processed base panel. On each cached load, the app rebuilds the synthetic experiment layer deterministically with seed 42 and overwrites any older synthetic eligibility, assignment or outcome fields in memory.
 
-> Python/statistics calculate validated facts first.  
-> AI converts those facts into an executive memo, risks, limitations and next-test plan for human review.
+This means the corrected methodology is applied even when the raw public source is not present on Streamlit Cloud.
 
-This demonstrates how AI can improve productivity in pricing analytics without removing human accountability.
+## 9. Run locally
 
----
-
-## 8. How to run locally
-
-```powershell
-cd E:\AJIT_JOB_PORTFOLIO\02_PROJECTS\01_b2b_pricing_experimentation
-
-# If the virtual environment already exists:
-.\.venv\Scripts\streamlit.exe run app.py --server.address 0.0.0.0 --server.port 8502
-
-# Alternative if streamlit is on PATH:
-streamlit run app.py --server.address 0.0.0.0 --server.port 8502
+```bash
+git clone https://github.com/Ajit2018/b2b-pricing-experimentation-workbench.git
+cd b2b-pricing-experimentation-workbench
+python -m pip install -r requirements.txt
+streamlit run app.py
 ```
 
-Open:
+Then open the local Streamlit URL shown in the terminal.
 
-`http://localhost:8502`
-
----
-
-## 9. Repository structure
+## 10. Repository structure
 
 ```text
-b2b-pricing-experimentation-workbench
-â”œâ”€ README.md
-â”œâ”€ requirements.txt
-â”œâ”€ app.py
-â”œâ”€ data
-â”‚  â”œâ”€ processed
-â”‚  â”‚  â””â”€ hotel_pricing_experiment_panel.csv
-â”‚  â””â”€ synthetic
-â”‚     â””â”€ b2b_pricing_experiment_synthetic_data.csv
-â”œâ”€ docs
-â”‚  â”œâ”€ methodology.md
-â”‚  â”œâ”€ executive_memo_template.md
-â”‚  â”œâ”€ executive_summary.md
-â”‚  â””â”€ sharing_notes_for_recruiters.md
-â”œâ”€ images
-â”‚  â””â”€ README.md
-â”œâ”€ sql
-â”‚  â””â”€ experiment_readout.sql
-â””â”€ src
-   â”œâ”€ generate_synthetic_data.py
-   â””â”€ streamlit_page.py
+b2b-pricing-experimentation-workbench/
+|-- README.md
+|-- requirements.txt
+|-- app.py
+|-- data/
+|   |-- processed/
+|   |   `-- hotel_pricing_experiment_panel.csv
+|   `-- synthetic/
+|       `-- b2b_pricing_experiment_synthetic_data.csv
+|-- docs/
+|   |-- methodology.md
+|   |-- executive_memo_template.md
+|   |-- executive_summary.md
+|   `-- sharing_notes_for_recruiters.md
+|-- images/
+|   `-- README.md
+|-- sql/
+|   `-- experiment_readout.sql
+`-- src/
+    |-- generate_synthetic_data.py
+    `-- streamlit_page.py
 ```
 
----
-
-## 10. Honest CV wording
+## 11. CV wording
 
 **B2B Pricing Experimentation Workbench**  
-Built an applied pricing experimentation workbench using public hotel-booking data enriched with a transparent synthetic pricing-treatment layer. Demonstrates controlled test design, uplift readout, margin trade-off analysis, elasticity-style scenarios, incrementality/cannibalization checks, SQL/Python analytics and AI-assisted executive memo workflow.
-
----
-
-## 11. Honest cover-letter wording
-
-My professional background is strongest in pricing analytics, value leakage detection, price harmonisation, scenario modelling, Power BI/Python/SQL-enabled decision tools and cross-functional stakeholder decision support. Where the role requires more direct marketplace experimentation evidence, I built a focused B2B pricing experimentation workbench using public hotel-booking data and a transparent synthetic pricing-treatment layer. It demonstrates how I approach controlled test readouts, incrementality, cannibalization, margin trade-offs and AI-assisted executive recommendation generation, with clear assumptions and limitations.
-
----
+Built an applied pricing experimentation workbench using public hotel-booking data enriched with a transparent synthetic pricing-treatment layer. Demonstrates controlled test design, uplift readout, margin trade-off analysis, elasticity-style scenarios, incrementality/cannibalization checks, SQL/Python analytics and an AI-ready executive memo workflow.
 
 ## 12. Production-readiness limitations
 
 A real production version would require:
 
-- true randomized assignment validation
-- experiment power analysis
+- verified randomized assignment and experiment instrumentation
+- power and sample-size analysis
 - real partner economics
-- seasonality controls
-- market and channel controls
+- seasonality, market and channel controls
 - partner eligibility governance
-- privacy/security review
+- privacy and security review
 - monitoring for unintended consequences
 - stakeholder approval workflow
-- long-term post-test measurement
+- longer-term post-test measurement
 
-These limitations are explicitly stated because the purpose of the project is to demonstrate applied methodology and decision thinking, not to claim access to proprietary marketplace data.
-
----
-
-## 13. Portfolio positioning
-
-This project supports applications in:
-
-- pricing analytics
-- pricing strategy
-- commercial decision support
-- revenue growth management
-- marketplace analytics
-- experimentation analytics
-- AI-enabled analytics workflows
-- analytics consulting and transformation
-
+These limitations are explicit because the purpose is to demonstrate applied pricing methodology and decision thinking, not to claim access to proprietary marketplace data.
