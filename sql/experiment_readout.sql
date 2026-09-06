@@ -1,39 +1,41 @@
-﻿WITH eligible_partners AS (
+WITH eligible AS (
     SELECT
         partner_id,
         partner_segment,
-        region,
         treatment_group,
-        bookings_before,
-        bookings_after,
-        gross_revenue_before,
-        gross_revenue_after,
-        platform_margin_before,
-        platform_margin_after
-    FROM partner_pricing_experiment
+        booking_units_after - booking_units_before AS booking_delta,
+        gross_booking_value_after - gross_booking_value_before AS revenue_delta,
+        platform_margin_after - platform_margin_before AS margin_delta
+    FROM hotel_pricing_experiment_panel
     WHERE eligible_for_test = 1
 ),
-partner_deltas AS (
+group_metrics AS (
     SELECT
-        *,
-        bookings_after - bookings_before AS booking_delta,
-        gross_revenue_after - gross_revenue_before AS revenue_delta,
-        platform_margin_after - platform_margin_before AS margin_delta,
-        1.0 * (bookings_after - bookings_before) / NULLIF(bookings_before, 0) AS booking_change_pct
-    FROM eligible_partners
+        partner_segment,
+        treatment_group,
+        COUNT(*) AS observations,
+        COUNT(DISTINCT partner_id) AS partner_proxies,
+        AVG(booking_delta) AS avg_booking_delta,
+        SUM(revenue_delta) AS revenue_delta,
+        SUM(margin_delta) AS margin_delta
+    FROM eligible
+    GROUP BY partner_segment, treatment_group
 ),
 segment_readout AS (
     SELECT
         partner_segment,
-        treatment_group,
-        COUNT(*) AS partners,
-        SUM(booking_delta) AS total_booking_delta,
-        SUM(revenue_delta) AS total_revenue_delta,
-        SUM(margin_delta) AS total_margin_delta,
-        AVG(booking_change_pct) AS avg_booking_change_pct
-    FROM partner_deltas
-    GROUP BY partner_segment, treatment_group
+        MAX(CASE WHEN treatment_group = 1 THEN avg_booking_delta END)
+          - MAX(CASE WHEN treatment_group = 0 THEN avg_booking_delta END) AS booking_uplift_vs_control,
+        MAX(CASE WHEN treatment_group = 1 THEN margin_delta END) AS treatment_margin_delta,
+        SUM(observations) AS total_observations
+    FROM group_metrics
+    GROUP BY partner_segment
 )
-SELECT *
+SELECT
+    partner_segment,
+    booking_uplift_vs_control,
+    treatment_margin_delta,
+    total_observations,
+    DENSE_RANK() OVER (ORDER BY booking_uplift_vs_control DESC) AS uplift_rank
 FROM segment_readout
-ORDER BY partner_segment, treatment_group;
+ORDER BY uplift_rank, partner_segment;
