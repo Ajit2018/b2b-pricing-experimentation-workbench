@@ -1,22 +1,15 @@
-﻿# Images / screenshots
+# Images / screenshots
 
-Add screenshots here before sharing the repository broadly.
+The authoritative interactive review surface is the live Streamlit dashboard:
 
-Recommended screenshots:
+https://ajit-b2b-pricing-workbench.streamlit.app/
 
-1. `01_decision_snapshot.png`
-   - top of Streamlit app showing business question, decision, uplift and margin cards.
+This folder is reserved for optional recruiter-facing screenshots captured from the deployed application. No generated or illustrative screenshots are committed as substitutes for the real dashboard.
 
-2. `02_experiment_readout.png`
-   - control vs treatment readout.
+Recommended captures, if added later:
 
-3. `03_scenario_elasticity.png`
-   - incentive slider and segment-level scenario impact.
-
-4. `04_incrementality.png`
-   - gross uplift to net incrementality/cannibalization bridge.
-
-5. `05_ai_memo_prompt.png`
-   - AI-assisted memo workflow.
-
-Screenshots help because most recruiters/hiring managers will not run the Streamlit app locally.
+1. `01_decision_snapshot.png` - business question, recommendation, uplift and margin cards.
+2. `02_experiment_readout.png` - treatment/control readout.
+3. `03_scenario_elasticity.png` - incentive slider and scenario outputs.
+4. `04_incrementality.png` - gross uplift to net incrementality/cannibalization bridge.
+5. `05_ai_memo_prompt.png` - governed AI-ready memo workflow.
