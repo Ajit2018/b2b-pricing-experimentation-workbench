@@ -1,3 +1,18 @@
+"""Legacy standalone synthetic-data generator.
+
+This file is retained only as an earlier development artifact / standalone demo.
+
+IMPORTANT:
+- It is NOT used by the deployed Streamlit application.
+- It is NOT the provenance of the current public-data-based workbench.
+- The authoritative deployed application is repository-root ``app.py``.
+- The current app starts from public Hotel Booking Demand observations (or the
+  checked-in processed base panel) and rebuilds a transparent synthetic
+  pricing-treatment layer deterministically.
+
+See README.md and docs/methodology.md for the current methodology.
+"""
+
 import pandas as pd
 import numpy as np
 from pathlib import Path
