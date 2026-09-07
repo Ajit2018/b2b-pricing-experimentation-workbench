@@ -2,14 +2,14 @@
 
 Applied pricing analytics portfolio project by Ajit Pal Singh.
 
-This project demonstrates pricing experimentation, commercial decision support, SQL/Python analytics, scenario modelling, incrementality/cannibalization analysis and an AI-ready executive memo workflow.
+This is a **public portfolio case study** built on real public hotel-booking observations plus a **transparent synthetic pricing-treatment layer**. It demonstrates how I would structure a marketplace-style pricing experiment and turn the results into commercially grounded decisions. It does **not** use Booking.com data or claim production marketplace experimentation experience.
 
 ## Live dashboard
 
 - Live Streamlit dashboard: https://ajit-b2b-pricing-workbench.streamlit.app/
 - GitHub repository: https://github.com/Ajit2018/b2b-pricing-experimentation-workbench
 
-The live dashboard is the fastest way to review the project. It shows the decision snapshot, experiment design, test readout, scenario/elasticity-style view, incrementality bridge, SQL example and AI-ready memo workflow.
+The live dashboard is the fastest way to review the project. It shows the decision snapshot, experiment design, treatment/control readout, scenario/elasticity-style view, incrementality bridge, SQL example and AI-ready executive memo workflow.
 
 ## 1. Executive summary
 
@@ -17,28 +17,47 @@ This project answers a practical pricing question:
 
 > Should a digital marketplace offer a pricing incentive to selected partner segments to increase incremental bookings without damaging margin, cancellation guardrails or other partner/customer segments?
 
-The workbench uses real public hotel-booking observations as a base and adds a transparent synthetic pricing-treatment layer because the public data does not contain real partner-level pricing experiments.
+The workbench uses real public hotel-booking observations as a base and adds a synthetic treatment layer because real partner-level pricing experiments, partner economics and randomized treatment assignments are proprietary.
 
 Workflow:
 
-`business question -> experiment design -> SQL/Python analysis -> uplift readout -> margin trade-off -> incrementality/cannibalization check -> executive recommendation`
+`business question -> frozen eligibility -> synthetic randomized treatment/control -> SQL/Python analysis -> uplift readout -> margin trade-off -> incrementality/cannibalization check -> executive recommendation`
 
 ## 2. What this project demonstrates
 
 - pricing analytics and commercial decision support
-- controlled A/B-style test design
+- simulated controlled A/B-style test design using synthetic treatment assignment
 - randomized treatment/control assignment on a frozen eligible population
 - uplift, confidence interval and p-value interpretation
 - revenue and platform-margin trade-offs
 - elasticity-style scenario modelling
 - incrementality and cannibalization checks
 - SQL analysis using CTEs, conditional aggregation and window ranking
+- Python-based experiment construction and statistical analysis
 - AI-ready executive memo prompt generation from validated facts
 - explicit assumptions, limitations and human-in-the-loop governance
 
-## 3. What this project does not claim
+## 3. Data provenance and what this project does not claim
 
-This is a public portfolio case study. It does not claim to estimate real Booking.com or other marketplace effects.
+### Real public base data
+
+The base observations come from the public **Hotel Booking Demand** dataset.
+
+### Synthetic analytical layer
+
+The following are created for the portfolio case study rather than observed from a production marketplace:
+
+- partner-segment proxies
+- experiment eligibility
+- treatment/control assignment
+- incentive economics
+- treatment response
+- commission/margin mechanics used by the case study
+- cannibalization assumptions
+
+### Explicit non-claims
+
+This project does not claim to estimate real Booking.com or other marketplace effects.
 
 It does not use:
 
@@ -48,7 +67,7 @@ It does not use:
 - real production experiment assignments
 - private customer data
 
-The treatment layer is synthetic because real B2B incentive, partner economics and randomized assignment data are proprietary.
+The purpose is to demonstrate applied pricing methodology, analytical judgement and decision support using public data plus transparent synthetic assumptions.
 
 ## 4. Public data source and license
 
@@ -77,9 +96,11 @@ The same booking's eventual cancellation outcome is **not** used to determine el
 
 Eligible Growth/Core observations are randomized 50/50 into treatment and control using a fixed experiment seed of **42**. The seed is intentionally fixed rather than exposed as a public UI control so the cloud demo is reproducible.
 
+This is simulated experimental assignment for the portfolio case study, not a real production experiment.
+
 ### Cancellation guardrail
 
-Cancellation is retained as an outcome guardrail. Because treatment assignment is independent of the cancellation outcome, the treatment/control cancellation comparison is no longer mechanically forced to zero by eligibility selection.
+Cancellation is retained as an outcome guardrail. Because treatment assignment is independent of the cancellation outcome, the treatment/control cancellation comparison is not mechanically forced by eligibility selection.
 
 ### Cannibalization
 
@@ -93,12 +114,12 @@ This avoids double-counting displacement.
 
 1. **Decision Snapshot** - recommendation, rationale and a decision-consistent action.
 2. **Executive Decision** - leadership-facing interpretation of uplift, margin, confidence interval, p-value, guardrails and limitations.
-3. **Experiment Design** - frozen eligibility, treatment/control setup, metrics and guardrails.
+3. **Experiment Design** - frozen eligibility, synthetic treatment/control setup, metrics and guardrails.
 4. **Test Readout** - control vs treatment distribution and segment-level results.
-5. **Scenario / Elasticity** - incentive slider located inside the scenario tab with immediate expected-booking and expected-margin outputs. This is explicitly not a causal elasticity estimate.
+5. **Scenario / Elasticity** - incentive slider with expected-booking and expected-margin outputs. This is explicitly an elasticity-style scenario, not a causal elasticity estimate.
 6. **Incrementality** - gross direct uplift, one-time cannibalization adjustment and net incremental effect.
-7. **AI-ready Memo** - a governed prompt pack built from validated facts; the public app does not call an LLM.
-8. **Data + SQL** - corrected in-memory panel, downloadable data and a stronger SQL example using CTEs and a window ranking.
+7. **AI-ready Memo** - governed prompt pack built from validated facts; the public app does not call an LLM.
+8. **Data + SQL** - corrected in-memory panel, downloadable data and SQL using CTEs, conditional aggregation and window ranking.
 
 ## 7. Decision logic
 
@@ -113,11 +134,17 @@ The action text is generated from the same decision logic, so the dashboard cann
 
 A material deterioration in the cancellation guardrail can block scaling even if demand increases.
 
-## 8. Cloud behavior
+## 8. Cloud behavior and authoritative implementation
+
+The authoritative deployed application is repository-root `app.py`.
 
 The Streamlit deployment can run from the included processed base panel. On each cached load, the app rebuilds the synthetic experiment layer deterministically with seed 42 and overwrites any older synthetic eligibility, assignment or outcome fields in memory.
 
-This means the corrected methodology is applied even when the raw public source is not present on Streamlit Cloud.
+This means the current methodology is applied even when the raw public source is not present on Streamlit Cloud.
+
+`src/streamlit_page.py` is only a compatibility wrapper around the root application.
+
+`src/generate_synthetic_data.py` is retained as a **legacy standalone fully synthetic demo generator** from an earlier development stage. It is **not used by the deployed application** and should not be interpreted as the provenance of the current public-data-based workbench.
 
 ## 9. Run locally
 
@@ -135,8 +162,9 @@ Then open the local Streamlit URL shown in the terminal.
 ```text
 b2b-pricing-experimentation-workbench/
 |-- README.md
+|-- DEPLOYMENT_QA.md
 |-- requirements.txt
-|-- app.py
+|-- app.py                         # authoritative deployed Streamlit app
 |-- data/
 |   |-- processed/
 |   |   `-- hotel_pricing_experiment_panel.csv
@@ -152,21 +180,16 @@ b2b-pricing-experimentation-workbench/
 |-- sql/
 |   `-- experiment_readout.sql
 `-- src/
-    |-- generate_synthetic_data.py
-    `-- streamlit_page.py
+    |-- generate_synthetic_data.py  # legacy standalone synthetic demo; not used by deployed app
+    `-- streamlit_page.py           # compatibility wrapper for root app.py
 ```
 
-## 11. CV wording
-
-**B2B Pricing Experimentation Workbench**  
-Built an applied pricing experimentation workbench using public hotel-booking data enriched with a transparent synthetic pricing-treatment layer. Demonstrates controlled test design, uplift readout, margin trade-off analysis, elasticity-style scenarios, incrementality/cannibalization checks, SQL/Python analytics and an AI-ready executive memo workflow.
-
-## 12. Production-readiness limitations
+## 11. Production-readiness limitations
 
 A real production version would require:
 
 - verified randomized assignment and experiment instrumentation
-- power and sample-size analysis
+- formal power and sample-size analysis
 - real partner economics
 - seasonality, market and channel controls
 - partner eligibility governance
@@ -175,4 +198,4 @@ A real production version would require:
 - stakeholder approval workflow
 - longer-term post-test measurement
 
-These limitations are explicit because the purpose is to demonstrate applied pricing methodology and decision thinking, not to claim access to proprietary marketplace data.
+These limitations are explicit because the purpose is to demonstrate applied pricing methodology and decision thinking, not to claim access to proprietary marketplace data or production experimentation ownership.
